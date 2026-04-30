@@ -1,0 +1,12 @@
+# Create a minimal one to protect against committing data files
+cat > .gitignore << 'EOF'
+data/raw/
+data/cached/
+*.pt
+*.pkl
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+experiments/checkpoints/
+EOF

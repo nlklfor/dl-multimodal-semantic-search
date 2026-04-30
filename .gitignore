@@ -1,12 +1,51 @@
-# Create a minimal one to protect against committing data files
-cat > .gitignore << 'EOF'
+# ── Data (never commit these) ─────────────────────────────────────────────────
 data/raw/
 data/cached/
 *.pt
 *.pkl
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
-.env
+*.h5
+
+# Keep split files (small text files, safe to commit)
+!data/splits/
+!data/splits/*.txt
+
+# ── Checkpoints & experiment outputs ─────────────────────────────────────────
 experiments/checkpoints/
-EOF
+experiments/raw_outputs/
+*.ckpt
+*.pth
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyc
+.Python
+*.egg-info/
+dist/
+build/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ── Environment ───────────────────────────────────────────────────────────────
+.env
+.venv
+env/
+venv/
+
+# ── macOS (you're on a Mac) ───────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+wandb/
+runs/

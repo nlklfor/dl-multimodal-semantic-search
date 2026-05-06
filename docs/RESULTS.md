@@ -76,7 +76,22 @@ Where our model sits on Flickr30k Text→Image R@1. Note that VSE++ has 6× more
 Shared 256-d embedding space projected to 2-D via UMAP. 300 matched (image, text) pairs from the test set; thin grey lines connect each image embedding (blue •) to its first-caption embedding (orange ▲). Matched pairs sitting close to each other = alignment learned successfully. The two modalities form a single intermixed cloud rather than two separate clusters, which is the right outcome for retrieval.
 
 ### Sample retrievals
-*(Run `scripts/make_report_figures.py` on Colab — needs the real Flickr30k images mounted from Drive. Output: `docs/figures/fig_sample_retrievals.png` showing top-5 results for 4 canned queries.)*
+
+Top-5 retrievals for four free-text queries against the full 31,014-image gallery, using the trained 50-epoch encoder. Score is cosine similarity in the shared 256-d embedding space.
+
+**`"a dog playing in the snow"`** — 5/5 correct. Cleanest result; semantic alignment is unambiguous.
+![query: a dog playing in the snow](figures/query_dog_snow.png)
+
+**`"a street performer entertaining a crowd"`** — 4/5 hit (breakdancers + magician); 1 false positive (tourists in a city street).
+![query: a street performer entertaining a crowd](figures/query_street_performer.png)
+
+**`"two man fighting with each other"`** — 4/5 hit (jiu-jitsu, sparring, sumo, karate); 1 false positive (a dancer with similar pose). Notable that the model generalises across martial-arts styles even though the query says nothing about gi, mat, or arena.
+![query: two man fighting with each other](figures/query_fighting.png)
+
+**`"cyclists racing on a mountain road"`** — 3/5 cyclists, 2/5 motocross. The model conflates motorcyclists with cyclists — a reasonable failure given the visual co-occurrence of helmets, race numbers and off-road terrain in Flickr30k.
+![query: cyclists racing on a mountain road](figures/query_cyclists.png)
+
+**Takeaway:** the model lands the right *semantic field* on every query and only swaps near-neighbours (motorcyclists ↔ cyclists, dancers ↔ fighters). That's the failure mode you'd expect from contrastive learning on 29k pairs without hard-negative mining.
 
 ### Per-epoch loss table (selected milestones)
 

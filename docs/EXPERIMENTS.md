@@ -22,28 +22,34 @@ All experiments use the following fixed configuration unless otherwise noted:
 
 ## Experiment 1 — Baseline Training Run
 
-**Goal:** Establish a baseline performance with default hyperparameters.
+**Goal:** Establish a baseline with default hyperparameters.
 
-**Temperature:** Learnable, initialized at `log(1/0.07) ≈ 2.66`
+**Temperature:** Learnable, initialised at `log(1/0.07) ≈ 2.66`. Final value after 20 epochs: **τ = 0.0485** — the model sharpened its similarity distribution by ~30 % over the run.
+
+**Wall time:** ~12 min on a Colab T4 (cached ResNet-50 features make each epoch ~30 s).
 
 ### Training Curves
 
-> *(To be filled in after training)*
+![Loss curves](loss_curve.png)
 
 | Epoch | Train Loss | Val Loss |
 |-------|-----------|---------|
-| 1     | —         | —       |
-| 5     | —         | —       |
-| 10    | —         | —       |
-| 15    | —         | —       |
-| 20    | —         | —       |
+| 1     | 3.7433    | 2.9991  |
+| 5     | 2.5386    | 2.4116  |
+| 10    | 2.2824    | 2.2854  |
+| 15    | 2.1110    | 2.1373  |
+| 20    | **2.0175** | **2.0937** |
 
-### Retrieval Results (Test Set)
+Train and val tracked tightly throughout — no overfitting (in some epochs val sits below train because dropout is active during training but disabled at eval time, which is expected).
 
-| Direction | R@1 | R@5 | R@10 |
-|-----------|-----|-----|------|
-| Text → Image | — | — | — |
-| Image → Text | — | — | — |
+### Retrieval Results (Test Set, 1,000 images × 5 captions)
+
+| Direction    | R@1    | R@5    | R@10   |
+|--------------|--------|--------|--------|
+| Text → Image | 16.08% | 41.56% | 54.88% |
+| Image → Text | 20.50% | 46.30% | 61.30% |
+
+R@1 sits ~160× above random chance (0.1 % for 1k candidates), confirming the projection MLPs successfully aligned the two pretrained representation spaces despite both backbones being frozen.
 
 ---
 

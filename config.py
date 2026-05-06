@@ -34,8 +34,11 @@ DROPOUT          = 0.1
 BATCH_SIZE       = 128
 LEARNING_RATE    = 1e-3
 WEIGHT_DECAY     = 1e-4
-NUM_EPOCHS       = 20
+NUM_EPOCHS       = 50
 SEED             = 42
+
+# Checkpointing — save every Nth epoch + final (avoids 50 × 286 MB disk bloat).
+SAVE_EVERY_N_EPOCHS = 10
 
 # Temperature for InfoNCE loss
 # Set to None to use learnable temperature (recommended)

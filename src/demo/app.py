@@ -7,10 +7,12 @@ from the Flickr30k gallery using vector similarity search.
 
 Usage:
     python src/demo/app.py --checkpoint experiments/checkpoints/checkpoint_epoch20_learnable.pt
-    python src/demo/app.py --checkpoint <path> --share   # public Gradio link
+    python src/demo/app.py --checkpoint <path> --share          # public Gradio link
+    python src/demo/app.py --checkpoint <path> --split test     # 1k ablation gallery
 """
 
 import os
+import json
 import argparse
 import torch
 import gradio as gr
@@ -28,10 +30,26 @@ from src.encoders.vision_encoder import VisionEncoder
 from src.encoders.text_encoder import TextEncoder
 
 
+GALLERY_EMBS_PATH = os.path.join(CACHED_DIR, "gallery_embs.pt")
+GALLERY_IDS_PATH  = os.path.join(CACHED_DIR, "gallery_ids.json")
+
+
 # ─── Build image gallery index ───────────────────────────────────────────────
 
+def load_precomputed_gallery():
+    """Fast path: load the 31k gallery built by scripts/build_gallery_index.py."""
+    print(f"Loading pre-computed gallery: {GALLERY_EMBS_PATH}")
+    gallery_embs = torch.load(GALLERY_EMBS_PATH, weights_only=True)
+    with open(GALLERY_IDS_PATH) as f:
+        image_ids = json.load(f)
+    assert len(image_ids) == gallery_embs.shape[0], \
+        "gallery_embs.pt and gallery_ids.json are out of sync."
+    print(f"Gallery loaded: {gallery_embs.shape[0]:,} images, dim={gallery_embs.shape[1]}")
+    return gallery_embs, image_ids
+
+
 def build_gallery_index(vision_enc, device, split='test'):
-    """Pre-compute embeddings for all gallery images. Run once at startup."""
+    """Fallback path: encode a single split on-the-fly. Used for ablation."""
     print(f"Building gallery index for split: {split}...")
 
     features_path = os.path.join(CACHED_DIR, f"{split}_image_features.pt")
@@ -155,9 +173,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=str, required=True,
                         help="Path to trained checkpoint .pt file")
-    parser.add_argument("--split", type=str, default="test",
+    parser.add_argument("--split", type=str, default=None,
                         choices=["train", "val", "test"],
-                        help="Gallery split to search over")
+                        help="Override: encode a single split on-the-fly instead of "
+                             "loading the pre-computed 31k gallery.")
     parser.add_argument("--share", action="store_true",
                         help="Create public Gradio sharing link")
     args = parser.parse_args()
@@ -175,8 +194,14 @@ if __name__ == "__main__":
     text_enc.load_state_dict(ckpt['text_encoder'])
     print(f"Loaded from epoch {ckpt['epoch']}")
 
-    # Build gallery index
-    gallery_embs, image_ids = build_gallery_index(vision_enc, device, split=args.split)
+    # Gallery: prefer pre-computed 31k index when available; fall back to per-split
+    # encoding when the user passes --split or the pre-computed file is missing.
+    use_precomputed = (args.split is None and os.path.exists(GALLERY_EMBS_PATH))
+    if use_precomputed:
+        gallery_embs, image_ids = load_precomputed_gallery()
+    else:
+        split = args.split or "test"
+        gallery_embs, image_ids = build_gallery_index(vision_enc, device, split=split)
 
     # Launch demo
     demo = build_interface(vision_enc, text_enc, gallery_embs, image_ids, device)

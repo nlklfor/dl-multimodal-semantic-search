@@ -5,8 +5,8 @@ Unit tests for the InfoNCE loss implementation.
 Run with: python -m pytest tests/ -v
 """
 
-import math
 import torch
+import torch.nn.functional as F
 import pytest
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -60,12 +60,16 @@ class TestInfoNCELoss:
             loss_fn(img, txt)
 
     def test_loss_is_differentiable(self):
-        """Gradients should flow through the loss."""
         loss_fn = InfoNCELoss()
-        img = torch.nn.functional.normalize(torch.randn(16, 256, requires_grad=True), dim=-1)
-        txt = torch.nn.functional.normalize(torch.randn(16, 256, requires_grad=True), dim=-1)
-        loss = loss_fn(img, txt)
+        img = torch.randn(16, 256, requires_grad=True)
+        txt = torch.randn(16, 256, requires_grad=True)
+        
+        img_norm = F.normalize(img, dim=-1)
+        txt_norm = F.normalize(txt, dim=-1)
+        
+        loss = loss_fn(img_norm, txt_norm)
         loss.backward()
+        
         assert img.grad is not None
         assert txt.grad is not None
 

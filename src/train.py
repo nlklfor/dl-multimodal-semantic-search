@@ -27,7 +27,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
     BATCH_SIZE, LEARNING_RATE, WEIGHT_DECAY, NUM_EPOCHS,
     SEED, TEMPERATURE, CHECKPOINTS_DIR, NUM_WORKERS, PIN_MEMORY,
-    CACHED_DIR, CAPTIONS_FILE, SPLITS_DIR, TEXT_MODEL_NAME, MAX_TOKEN_LENGTH
+    CACHED_DIR, CAPTIONS_FILE, SPLITS_DIR, TEXT_MODEL_NAME, MAX_TOKEN_LENGTH,
+    SAVE_EVERY_N_EPOCHS,
 )
 from src.encoders.vision_encoder import VisionEncoder
 from src.encoders.text_encoder import TextEncoder
@@ -213,10 +214,13 @@ def train(args):
         print(f"\n  Epoch {epoch+1:02d} | Train Loss: {avg_train_loss:.4f} | "
               f"Val Loss: {avg_val_loss:.4f} | τ: {criterion.temperature:.4f}\n")
 
-        # ── Save checkpoint every epoch ───────────────────────────────────────
-        tag = f"temp{args.temperature}" if args.temperature else "learnable"
-        save_checkpoint(epoch + 1, vision_enc, text_enc, optimizer,
-                        avg_val_loss, tag=tag)
+        # ── Save checkpoint every N epochs + final (keeps disk usage sane) ────
+        tag         = f"temp{args.temperature}" if args.temperature else "learnable"
+        is_milestone = (epoch + 1) % SAVE_EVERY_N_EPOCHS == 0
+        is_final     = (epoch + 1) == args.epochs
+        if is_milestone or is_final:
+            save_checkpoint(epoch + 1, vision_enc, text_enc, optimizer,
+                            avg_val_loss, tag=tag)
 
     # ── Save training history ─────────────────────────────────────────────────
     hist_path = os.path.join(CHECKPOINTS_DIR, "training_history.json")

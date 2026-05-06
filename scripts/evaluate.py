@@ -11,7 +11,6 @@ Usage:
 import os
 import argparse
 import torch
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 import pandas as pd
 
@@ -19,12 +18,14 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import (
-    CACHED_DIR, CAPTIONS_FILE, SPLITS_DIR, BATCH_SIZE, NUM_WORKERS
+    CACHED_DIR, CAPTIONS_FILE, SPLITS_DIR, BATCH_SIZE
 )
 from src.encoders.vision_encoder import VisionEncoder
 from src.encoders.text_encoder import TextEncoder
-from src.dataset.flickr_dataset import FlickrDataset
 from src.evaluation.recall_at_k import evaluate_recall, print_results
+
+
+N_CAPTIONS_PER_IMAGE = 5   # Flickr30k canonical setup
 
 
 def load_captions(captions_file):
@@ -47,22 +48,41 @@ def load_split_ids(split):
 
 
 @torch.no_grad()
-def build_embeddings(dataset, vision_enc, text_enc, device):
-    """Encode all images and captions in the dataset."""
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False,
-                        num_workers=NUM_WORKERS)
+def build_eval_embeddings(image_features, image_ids, captions_dict,
+                          vision_enc, text_enc, device, batch_size=BATCH_SIZE):
+    """
+    Build embeddings in the canonical Flickr30k retrieval-eval layout:
 
-    all_image_embs = []
-    all_text_embs  = []
+        image_embs  shape (N_images, D)        — one row per image
+        text_embs   shape (N_images * 5, D)    — 5 captions per image, flattened
+                                                 in the order
+                                                 [img0_cap0..cap4, img1_cap0..cap4, …]
 
-    for image_feats, captions in tqdm(loader, desc="Encoding"):
-        image_feats = image_feats.to(device)
-        img_emb = vision_enc(image_feats)       # (B, 256)
-        txt_emb = text_enc(captions, device)    # (B, 256)
-        all_image_embs.append(img_emb.cpu())
-        all_text_embs.append(txt_emb.cpu())
+    This matches what `evaluate_recall` in src/evaluation/recall_at_k.py expects
+    (it derives correct_image_idx = caption_idx // 5).
+    """
+    # ── Images ───────────────────────────────────────────────────────────────
+    image_embs = []
+    for i in tqdm(range(0, len(image_ids), batch_size), desc="Encoding images"):
+        feats = image_features[i:i + batch_size].to(device)
+        image_embs.append(vision_enc(feats).cpu())
+    image_embs = torch.cat(image_embs, dim=0)
 
-    return torch.cat(all_image_embs), torch.cat(all_text_embs)
+    # ── Captions, flattened in canonical order ───────────────────────────────
+    flat_captions = []
+    for img_id in image_ids:
+        caps = captions_dict[img_id]
+        assert len(caps) == N_CAPTIONS_PER_IMAGE, \
+            f"{img_id} has {len(caps)} captions, expected {N_CAPTIONS_PER_IMAGE}"
+        flat_captions.extend(caps[:N_CAPTIONS_PER_IMAGE])
+
+    text_embs = []
+    for i in tqdm(range(0, len(flat_captions), batch_size), desc="Encoding captions"):
+        batch = flat_captions[i:i + batch_size]
+        text_embs.append(text_enc(batch, device).cpu())
+    text_embs = torch.cat(text_embs, dim=0)
+
+    return image_embs, text_embs
 
 
 def main(args):
@@ -83,21 +103,19 @@ def main(args):
     text_enc.eval()
 
     # Load test data
-    captions = load_captions(CAPTIONS_FILE)
-    test_ids  = load_split_ids('test')
+    captions       = load_captions(CAPTIONS_FILE)
+    test_ids       = load_split_ids('test')
+    test_features  = torch.load(os.path.join(CACHED_DIR, "test_image_features.pt"),
+                                 weights_only=True)
 
-    test_dataset = FlickrDataset(
-        features_path = os.path.join(CACHED_DIR, "test_image_features.pt"),
-        captions_dict = captions,
-        image_ids     = test_ids,
-        split         = 'test',
-    )
-
-    # Build embeddings
+    # Build embeddings in canonical Flickr30k eval layout (1k images × 5 captions)
     print("\nBuilding embeddings for test set...")
-    image_embs, text_embs = build_embeddings(test_dataset, vision_enc, text_enc, device)
-    print(f"Image embeddings: {image_embs.shape}")
-    print(f"Text embeddings:  {text_embs.shape}")
+    image_embs, text_embs = build_eval_embeddings(
+        test_features, test_ids, captions,
+        vision_enc, text_enc, device,
+    )
+    print(f"Image embeddings: {tuple(image_embs.shape)}  (expected (1000, 256))")
+    print(f"Text embeddings:  {tuple(text_embs.shape)}   (expected (5000, 256))")
 
     # Evaluate
     print("\nComputing Recall@K...")
